@@ -1,0 +1,211 @@
+---
+title: "THE POPULARITY OF BOOKS ON GOODREADS"
+subtitle: "DATA 606 Final Project"
+author: "Stephanie Chiang"
+date: "FALL 2024"
+output:
+  pdf_document: default
+  html_document: default
+urlcolor: blue
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+### Abstract
+This is a statistical analysis of some of the factors that contribute to the popularity of books on [Goodreads](goodreads.com). This observational data posted on Kaggle was originally sourced from Goodreads' Top 100 lists of the most popular books for each year from 1980 to 2023. In particular, the focus is to determine whether there is a relationship between being part of a multi-volume series and higher ratings, more reviews or a larger current or potential readership pool. 
+
+Summary statistics and visualizations introduce the distributions and observed relationships between the independent variables (standalone books vs serials, and first in series vs sequel) and the dependent variables (mean user ratings, number of ratings, and readership counts). Correlation analyses are applied to assess the strength of linear relationships between variables. Regression modeling is used to evaluate how well certain features predict book popularity, allowing us to examine the individual impact of each explanatory variable.
+
+Results indicate that serials are more likely to receive higher average ratings, with sequels (or prequels) receiving more ratings and higher average ratings than a first published installment. In contrast, there are more current and potential readers interested in stand-alone books than series. This analysis provides potentially valuable insights for publishers, authors, and marketers for data-driven decision-making.
+
+
+### Data Preparation
+
+The explanatory variables begin as text fields, which are converted into categorical variables with two levels each. For `series_title`, based on whether a non-empty string exists in the column, mark with a TRUE or FALSE in a new column. Then, for `series_release_number`, 
+
+if it is listed as the first in series
+here I am selecting for '1', with the assumption that '0' means a prequel. Since those are published AFTER the initial volume, I don't want to count those as the first. In this case the boolean is TRUE for first published and  FALSE for any sequel or prequel)
+
+The response variables are numerical: rating_score, num_ratings, current_readers, want_to_read.
+
+Research question: Are serials (books that are part of multi-volume series) more popular (either by readership, interest or rating) than standalone books? In other words, is there a relationship between being part of a series and popularity for books? 
+
+
+```{r import, message=FALSE, warning=FALSE}
+raw_books <- read.csv(file = "goodreads_top100.csv")
+
+# select relevant columns
+books <- raw_books |>
+  select("isbn",
+         "title",
+         "series_title",
+         "series_release_number",
+         "rating_score",
+         "num_ratings",
+         "current_readers",
+         "want_to_read")
+```
+
+```{r clean-books-df}
+# convert blank strings to NAs in text columns
+books <- books |>
+  mutate(isbn = na_if(isbn, "")) |>
+  mutate(series_title = na_if(series_title, "")) |>
+  mutate(series_release_number = na_if(series_release_number, ""))
+
+# remove duplicate isbn numbers
+books <- books |>
+  distinct(isbn, .keep_all = TRUE)
+
+# add column to indicate if in series
+books <- books |>
+  mutate(serial = !is.na(books$series_title) & !is.na(books$series_release_number))
+
+head(books)
+```
+
+```{r serial-df}
+# create a 2nd table for any series-only analysis
+series <- filter(books, serial == TRUE)
+
+# add column for if it is the first release of its series
+series <- series |>
+  mutate(first_book = ifelse(grepl("^[01]", series$series_release_number),
+                             TRUE,
+                             FALSE)) |>
+  subset(select = -c(serial))
+
+head(series)
+```
+
+group by series_title
+- determine the first?
+- clean the series_release_number
+- count number of books and determine the avg rating for each series?
+
+### Summary Statistics & Data Visualizations
+
+Data Analysis
+- The appropriate statistical test(s) was used for the data and interpretation was clear.
+
+1)
+mean ratings
+num of ratings
+ - serials vs standalone
+ - first vs sequel
+ 
+```{r series-ratings, message=FALSE, warning=FALSE}
+# summary statistics for rating_score, series vs standalone
+rating_summary <- books |>
+  group_by(serial) |>
+  reframe(
+    count = n(),
+    mean = mean(rating_score),
+    sd = sd(rating_score),
+    median = median(rating_score),
+    min = min(rating_score),
+    max = max(rating_score),
+  )
+
+rating_summary
+```
+
+```{r series-box}
+ggplot(books, aes(x = serial, y = rating_score)) +
+  geom_boxplot() +
+  scale_x_discrete(labels = c("FALSE" = "Standalone book", "TRUE" = "Part of a series")) +
+  labs(y = "Goodreads average rating", x= "")
+```
+
+```{r first-ratings}
+# summary statistics for rating_score, first in a series vs sequel
+rating_summary_sequels <- series |>
+  group_by(first_book) |>
+  reframe(
+    count = n(),
+    mean = mean(rating_score),
+    sd = sd(rating_score),
+    median = median(rating_score),
+    min = min(rating_score),
+    max = max(rating_score),
+  )
+
+rating_summary_sequels
+```
+
+```{r first-box}
+ggplot(series, aes(x = first_book, y = rating_score)) +
+  geom_boxplot() +
+  scale_x_discrete(labels = c("FALSE" = "Sequel or prequel", "TRUE" = "First of its series")) +
+  labs(y = "Goodreads average rating", x= "")
+```
+
+
+2)
+count
+mean
+ - current vs potential readers
+ 
+```{r readership-count}
+# comparing mean of the numbers of current readers vs interested/potential readers
+books_readership <- books |>
+  pivot_longer(cols = c("current_readers", "want_to_read"),
+               names_to = "reader_type",
+               values_to = "readership")
+
+readership_summary <- books_readership |>
+  group_by(serial, reader_type) |>
+  summarize(mean_readership = mean(readership, na.rm = TRUE))
+
+readership_summary
+```
+
+```{r readership-bar}
+ggplot(readership_summary, aes(fill = reader_type, x = serial, y = mean_readership)) + 
+  geom_bar(position = "dodge", stat = "identity") +
+  scale_y_sqrt() +
+  labs(y = "Number of users", x= "") +
+  scale_x_discrete(labels = c("FALSE" = "Standalone book", "TRUE" = "Part of a series")) +
+  scale_fill_discrete(name = "Reader type", labels = c("Current Reader", "Want to read"))
+```
+
+3) is it the number of books?
+
+
+
+
+### Statistical Analyses
+Include the appropriate statistics for your method used.
+For null hypothesis tests (e.g. t-test, chi-squared, ANOVA, etc.), state the null and alternative hypotheses along with relevant statistic and p-value (and confidence interval if appropriate).
+
+1)
+null hyp: series has no affect on popularity
+alt: it does
+
+2) 
+null hyp: series order has no affect on popularity
+alt: it does
+
+For regression models, include the regression output and interpret the R-squared value.
+
+1)
+explanatory var: series
+response var: ratings, readership
+
+2)
+explanatory var: first
+response var: ratings, readership
+
+3) 
+explanatory var: number of books in series
+response var: readership
+
+### Conclusion
+Why is this analysis important?
+Limitations of the analysis?
+- Conclusion includes a clear answer to the statistical question that is consistent with the data analysis and the method of data collection.
+
+- Overall Presentation	Attractive, well-organized, well-written presentation

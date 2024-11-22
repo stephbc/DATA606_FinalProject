@@ -1,0 +1,159 @@
+---
+title: "DATA 606 Data Project Proposal"
+author: "Stephanie Chiang"
+output: pdf_document
+urlcolor: blue
+date: "2024-11-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r imports, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+
+### Data Preparation
+
+```{r import, message=FALSE, warning=FALSE}
+raw_books <- read.csv(file = "goodreads_top100.csv")
+
+# select relevant columns
+books <- raw_books |>
+  select("isbn",
+         "title",
+         "series_title",
+         "series_release_number",
+         "rating_score",
+         "num_ratings",
+         "current_readers",
+         "want_to_read")
+```
+
+```{r clean-books-df}
+# convert blank strings to NAs in text columns
+books <- books |>
+  mutate(isbn = na_if(isbn, "")) |>
+  mutate(series_title = na_if(series_title, "")) |>
+  mutate(series_release_number = na_if(series_release_number, ""))
+
+# remove duplicate isbn numbers
+books <- books |>
+  distinct(isbn, .keep_all = TRUE)
+
+# add column to indicate if in series
+books <- books |>
+  mutate(serial = !is.na(books$series_title) & !is.na(books$series_release_number))
+
+head(books)
+```
+
+```{r serial-df}
+# create a 2nd table for any serials-only analysis
+serial_books <- filter(books, serial == TRUE)
+
+# add column for if it is first in a series
+# may need further cleanup, depends if a prequel counts as first?
+serial_books <- serial_books |>
+  mutate(first_book = ifelse(grepl("^[01]", serial_books$series_release_number),
+                             TRUE,
+                             FALSE)) |>
+  subset(select = -c(serial))
+
+head(serial_books)
+```
+
+
+### Research question 
+
+Are serials (books that are part of multi-volume series) more popular (either by readership, interest or rating) than standalone books? In other words, is there a relationship between being part of a series and popularity for books? 
+
+
+### Cases 
+
+Each case is a book published between 1980-2023 and ranked in the top 100 for its year, based on Goodreads ratings. There are 4399 cases.
+
+
+### Data collection 
+
+This dataset posted on Kaggle was "collected through web scraping techniques" from Goodreads.com
+
+
+### Type of study 
+
+This is an observational study.
+
+
+### Data Source 
+
+[Link to Top Goodreads Books Collection](https://www.kaggle.com/datasets/cristaliss/ultimate-book-collection-top-100-books-up-to-2023)
+
+
+### Describe your variables?
+
+The response variables are numerical: rating_score, num_ratings, current_readers, want_to_read.
+The explanatory variables are text fields, which will be converted into boolean / categorical: series_title (exists yes/no), series_release_number (first in series or not)
+
+
+### Relevant summary statistics 
+
+```{r summary, message=FALSE, warning=FALSE}
+# summary statistics for rating_score, serials vs standalone
+rating_summary <- books |>
+  group_by(serial) |>
+  reframe(
+    count = n(),
+    mean = mean(rating_score),
+    sd = sd(rating_score),
+    median = median(rating_score),
+    min = min(rating_score),
+    max = max(rating_score),
+  )
+
+rating_summary
+
+# summary statistics for rating_score, first in a series vs sequel
+rating_summary_sequels <- serial_books |>
+  group_by(first_book) |>
+  reframe(
+    count = n(),
+    mean = mean(rating_score),
+    sd = sd(rating_score),
+    median = median(rating_score),
+    min = min(rating_score),
+    max = max(rating_score),
+  )
+
+rating_summary_sequels
+
+# comparing mean of the numbers of current readers vs interested/potential readers
+books_readership <- books |>
+  pivot_longer(cols = c("current_readers", "want_to_read"),
+               names_to = "reader_type",
+               values_to = "readership")
+
+readership_summary <- books_readership |>
+  group_by(serial, reader_type) |>
+  summarize(mean_readership = mean(readership, na.rm = TRUE))
+
+readership_summary
+```
+
+```{r box-plots}
+ggplot(books, aes(x = serial, y = rating_score)) +
+  geom_boxplot() +
+  labs(x = "Is the book part of a series?", y = "Goodreads rating")
+
+ggplot(serial_books, aes(x = first_book, y = rating_score)) +
+  geom_boxplot() +
+  labs(x = "Is the book the first in its series?", y = "Goodreads rating")
+
+ggplot(readership_summary, aes(fill = reader_type, x = serial, y = mean_readership)) + 
+  geom_bar(position = "dodge", stat = "identity") +
+  scale_y_sqrt() +
+  labs(x = "Is the book part of a series?", y = "Readership")
+```
+
