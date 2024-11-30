@@ -15,11 +15,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Abstract
 
-This is a statistical analysis of some of the factors that contribute to the popularity of books on [Goodreads](goodreads.com). The observational dataset posted on Kaggle was originally sourced from Goodreads' Top 100 lists of the most popular books for each year from 1980 to 2023. In particular, the focus will be to answer the question:
+This is a statistical analysis of some of the factors that may contribute to the popularity of books on [Goodreads](goodreads.com). The observational dataset from [Kaggle](https://www.kaggle.com/datasets/cristaliss/ultimate-book-collection-top-100-books-up-to-2023/) was originally sourced from Goodreads' Top 100 lists of the most popular books for each year from 1980 to 2023. In particular, the focus will be to answer the question:
 
-Are serials, or books that are part of multi-volume series, associated with higher ratings and a larger readership than standalone books? In other words, is there a relationship between the independent variables (standalone books vs serials, and first in series vs sequel) and the dependent variables (mean user ratings, number of current readers and potential readership counts)?
+Are serials, or books that are part of multi-volume series, associated with significantly different average user ratings and readership numbers than standalone books? In other words, is there a relationship between the independent variables (standalone books vs serials, and first in series vs sequel) and the dependent variables (mean user ratings, number of current readers and potential readership counts)?
 
-Using summary statistics, visualizations and regression modeling, the results indicate that serials do not have significantly different mean user ratings; and sequels also do not show notable difference in average ratings than a first published installment. However, there are more current and potential Goodreads users for standalone book titles than books in a series. This analysis could provide potentially valuable insights for publishers, authors, and marketers for data-driven decision-making.
+Using summary statistics, visualizations and regression modeling, the results indicate that serials do not show statistically significant differences in mean user ratings; and sequels also do not show notable difference in average ratings than a first published installment. The differences in numbers of current and potential Goodreads users for standalone books vs series is also not significant. This analysis could provide potentially valuable insights for publishers, authors, and marketers for data-driven decision-making.
 
 
 ## Data Preparation
@@ -47,7 +47,7 @@ books <- raw_books |>
          "want_to_read")
 ```
 
-```{r clean-books-df}
+```{r clean-books-df, paged.print=TRUE}
 # convert blank strings to NAs in text columns
 books <- books |>
   mutate(isbn = na_if(isbn, "")) |>
@@ -62,10 +62,10 @@ books <- books |>
 books <- books |>
   mutate(serial = !is.na(books$series_title) & !is.na(books$series_release_number))
 
-knitr::kable(head(books))
+knitr::kable(head(books[, 2:5]), "pipe")
 ```
 
-```{r serial-df}
+```{r serial-df, paged.print=TRUE}
 # create a 2nd table for series-only analysis
 series <- filter(books, serial == TRUE)
 
@@ -76,7 +76,7 @@ series <- series |>
                              FALSE)) |>
   subset(select = -c(serial))
 
-knitr::kable(head(series))
+knitr::kable(head(series[, 2:5]), "pipe")
 ```
 
 ## Summary Statistics & Data Visualizations
@@ -104,7 +104,7 @@ rating_summary
 ggplot(books, aes(x = serial, y = rating_score)) +
   geom_boxplot() +
   scale_x_discrete(labels = c("FALSE" = "Standalone book", "TRUE" = "Part of a series")) +
-  labs(y = "Goodreads average rating", x= "")
+  labs(y = "Goodreads average rating", x= "", title = "Rating by Book Type")
 ```
 
 Since each book is an independent observation and the sample sizes for each group are comfortably large, the conditions for inference are satisfied; a hypothesis test for the difference of the two means can determine any association.
@@ -133,7 +133,8 @@ series_null_dist <- books |>
   calculate(stat = "diff in means", order = c(TRUE, FALSE))
 
 ggplot(data = series_null_dist, aes(x = stat)) +
-  geom_histogram()
+  geom_histogram() +
+  labs(title = "Distribution of Null Permutations - Book Type")
 ```
 
 ```{r series-pval, message=FALSE, warning=FALSE}
@@ -174,7 +175,7 @@ ggplot(series, aes(x = first_book, y = rating_score)) +
   geom_boxplot() +
   scale_x_discrete(labels = c("FALSE" = "Sequel or prequel",
                               "TRUE" = "First of its series")) +
-  labs(y = "Goodreads average rating", x = "")
+  labs(y = "Goodreads average rating", x = "", title = "Rating by Series Order")
 ```
 
 The hypothesis test for serials alone is as follows: 
@@ -196,7 +197,8 @@ first_null_dist <- series |>
   calculate(stat = "diff in means", order = c(TRUE, FALSE))
 
 ggplot(data = first_null_dist, aes(x = stat)) +
-  geom_histogram()
+  geom_histogram() +
+  labs(title = "Distribution of Null Permutations - Series Order")
 ```
 
 ```{r first-pval, message=FALSE, warning=FALSE}
@@ -246,7 +248,9 @@ series_length <- series |>
   summarize(
     series_len = n(),
     total_current = sum(current_readers),
-    total_want_read = sum(want_to_read)) |>
+    total_want_read = sum(want_to_read),
+    mean_score = mean(rating_score)
+  ) |>
   replace_na(list(total_current = 0, total_potential = 0)) |>
   select(-series_title)
 
@@ -283,7 +287,7 @@ m_read <- lm(total_want_read ~ series_len, data = series_length)
 summary(m_read)
 ```
 
-The residual plots only further demonstrate the weak relationship. The residuals do not form much of a cloud around the 0 in the scatter plot and the normal probability plot is heavily skewed.
+The residual plots only further demonstrate the weak relationship. The points do not form much of a cloud around the 0 in the scatter plot and the normal probability plot is flattened in the center.
 
 ```{r resid}
 ggplot(data = m_read, aes(x = .fitted, y = .resid)) +
@@ -296,7 +300,5 @@ ggplot(data = m_read, aes(x = .fitted, y = .resid)) +
 
 ## Conclusion
 
-Why is this analysis important?
-Limitations of the analysis?
-- Conclusion includes a clear answer to the statistical question that is consistent with the data analysis and the method of data collection.
+
 
