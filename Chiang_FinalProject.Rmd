@@ -15,20 +15,20 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Abstract
 
-This is a statistical analysis of some of the factors that may contribute to the popularity of books on [Goodreads](goodreads.com). The observational dataset from [Kaggle](https://www.kaggle.com/datasets/cristaliss/ultimate-book-collection-top-100-books-up-to-2023/) was originally sourced from Goodreads' Top 100 lists of the most popular books for each year from 1980 to 2023. In particular, the focus will be to answer the question:
+This is an analysis of some of the factors that may contribute to the popularity of books on [Goodreads](goodreads.com). The observational dataset from [Kaggle](https://www.kaggle.com/datasets/cristaliss/ultimate-book-collection-top-100-books-up-to-2023/) was originally sourced from Goodreads' Top 100 lists of the most popular books for each year from 1980 to 2023. In particular, the focus will be to answer the question:
 
 Are serials, or books that are part of multi-volume series, associated with significantly different average user ratings and readership numbers than standalone books? In other words, is there a relationship between the independent variables (standalone books vs serials, and first in series vs sequel) and the dependent variables (mean user ratings, number of current readers and potential readership counts)?
 
-Using summary statistics, visualizations and regression modeling, the results indicate that serials do not show statistically significant differences in mean user ratings; and sequels also do not show notable difference in average ratings than a first published installment. The differences in numbers of current and potential Goodreads users for standalone books vs series is also not significant. This analysis could provide potentially valuable insights for publishers, authors, and marketers for data-driven decision-making.
+Using summary statistics, visualizations and regression modeling, the results indicate that serials do not show statistically significant differences in mean user ratings; and sequels also do not show notable difference in average ratings than a first published installment. The differences in numbers of current and potential Goodreads users for standalone books vs series is also statistically insignificant. This analysis could provide potentially valuable insights for publishers, authors, and marketers for data-driven decision-making in their industry.
 
 
 ## Data Preparation
 
 The explanatory variables are created from text fields in the raw data. Each of the 4399 rows is given a value in a new categorical column with two levels (TRUE or FALSE) called `serial` based on whether there are non-empty strings under `series_title` and `series_release_number`.
 
-Then, in a second data frame for only those books with `serial` set to TRUE, each observation is marked in a new `first_book` column with a TRUE if it is the first book published in its series or FALSE for sequels and prequels. The determination here is that since prequels are published *after* the initial volume, they should not be considered the first in a series.
+Then, in a second data frame for only those books with `serial` set to TRUE, each observation is marked in a new `first_book` column with a TRUE if it is the first book published in its series or FALSE for sequels and prequels. (The determination here is that since prequels are published *after* the initial volume, they should not be considered the first in a series.)
 
-The response variables are numerical: `rating_score`, `num_ratings`, `current_readers`, `want_to_read`.
+The response variables are numerical: `rating_score` (out of 5), `num_ratings`, `current_readers`, `want_to_read`.
 
 ```{r import, message=FALSE, warning=FALSE}
 library(tidyverse)
@@ -62,7 +62,7 @@ books <- books |>
 books <- books |>
   mutate(serial = !is.na(books$series_title) & !is.na(books$series_release_number))
 
-knitr::kable(head(books[, 2:5]), "pipe")
+knitr::kable(head(books[, 2:5]))
 ```
 
 ```{r serial-df, paged.print=TRUE}
@@ -76,14 +76,14 @@ series <- series |>
                              FALSE)) |>
   subset(select = -c(serial))
 
-knitr::kable(head(series[, 2:5]), "pipe")
+knitr::kable(head(series[, 2:5]))
 ```
 
 ## Summary Statistics & Data Visualizations
 
 ### Mean Ratings: Series vs Standalone Books
 
-Comparing the average ratings shows a slight a preference by Goodreads users for serials over standalone books.
+When comparing the average user ratings, there is an observed preference by Goodreads users for books in serials standalone books.
 
 ```{r series-ratings, message=FALSE, warning=FALSE}
 rating_summary <- books |>
@@ -107,14 +107,13 @@ ggplot(books, aes(x = serial, y = rating_score)) +
   labs(y = "Goodreads average rating", x= "", title = "Rating by Book Type")
 ```
 
-Since each book is an independent observation and the sample sizes for each group are comfortably large, the conditions for inference are satisfied; a hypothesis test for the difference of the two means can determine any association.
+Since each book is an independent observation and the sample sizes for each group are comfortably large, the conditions for inference are satisfied; a hypothesis test for the difference of the two means can determine if the association is noteworthy.
 
 - The null hypothesis H0: There is no relationship between being part of a series and average rating.
 
-- The alternative hypothesis H1: The average ratings are significantly different for serials.
+- The alternative hypothesis H1: The average ratings are significantly different for serial books.
 
-Below, the difference in means is calculated in the order of TRUE - FALSE != 0.
-The test is then simulated on the null distribution and plotted.
+Below, the difference in means is calculated in the order of TRUE - FALSE != 0. Then, a test is then simulated; the null distribution is plotted for demonstration.
 
 ```{r series-hyp, message=FALSE, warning=FALSE}
 library(infer)
@@ -132,10 +131,16 @@ series_null_dist <- books |>
   generate(reps = 1000, type = "permute") |>
   calculate(stat = "diff in means", order = c(TRUE, FALSE))
 
+series_null_dist |>
+  visualize() +
+  shade_p_value(obs_stat = series_obs_diff, direction = "two-sided")
+
 ggplot(data = series_null_dist, aes(x = stat)) +
   geom_histogram() +
   labs(title = "Distribution of Null Permutations - Book Type")
 ```
+
+The plots show that the null permutations fall entirely below the observed difference between serial and standalone ratings.
 
 ```{r series-pval, message=FALSE, warning=FALSE}
 series_null_dist |>
@@ -148,12 +153,12 @@ series_diff_ci <- series_null_dist |> get_ci(level = 0.95)
 series_diff_ci
 ```
 
-At a confidence level of 95%, the difference in mean ratings between series and standalone books should fall between -0.014 to 0.015. Since this contains 0, we can fail to reject the null hypothesis. There is no significant difference in average rating for serials.
+At a confidence level of 95%, the difference in mean ratings between series and standalone books should fall between -0.014 to 0.015. Since this contains 0, there is a failure to reject the null hypothesis; there is no significant difference in average rating for serials.
 
 
 ### Average Ratings: Firsts vs Sequels
 
-Within series, there is a somewhat more noticeable bump in ratings for sequels over the first book.
+Within book series, the observed difference in ratings for sequels vs a first book in a series is even larger.
 
 ```{r first-ratings}
 rating_summary_sequels <- series |>
@@ -178,10 +183,11 @@ ggplot(series, aes(x = first_book, y = rating_score)) +
   labs(y = "Goodreads average rating", x = "", title = "Rating by Series Order")
 ```
 
-The hypothesis test for serials alone is as follows: 
+The hypothesis test for serials is as follows: 
 
-The null hypothesis H0: There is no relationship between being a sequel and average rating.
-The alternative hypothesis H1: The average ratings are significantly different for sequels than first books.
+- The null hypothesis H0: There is no relationship between being the first in a series and average rating.
+
+- The alternative hypothesis H1: The average ratings are significantly different for sequels than first books.
 
 ```{r first-hyp, message=FALSE, warning=FALSE}
 set.seed(99)
@@ -190,32 +196,42 @@ first_obs_diff <- series |>
   specify(rating_score ~ first_book) |>
   calculate(stat = "diff in means", order = c(TRUE, FALSE))
 
+first_obs_diff
+
 first_null_dist <- series |>
   specify(rating_score ~ first_book) |>
   hypothesize(null = "independence") |>
   generate(reps = 1000, type = "permute") |>
   calculate(stat = "diff in means", order = c(TRUE, FALSE))
 
+first_null_dist |>
+  visualize() +
+  shade_p_value(obs_stat = first_obs_diff, direction = "two-sided")
+
 ggplot(data = first_null_dist, aes(x = stat)) +
   geom_histogram() +
   labs(title = "Distribution of Null Permutations - Series Order")
 ```
 
+Once again, the observed difference falls outside the range of the null permutations between serial and standalone ratings.
+
 ```{r first-pval, message=FALSE, warning=FALSE}
 first_null_dist |>
   get_p_value(obs_stat = first_obs_diff, direction = "two_sided")
+```
 
+```{r first-ci}
 first_diff_ci <- first_null_dist |> get_ci(level = 0.95)
 
 first_diff_ci
 ```
 
-With the confidence level set to 95%, the difference in mean ratings between first books and sequels/prequels should fall between -0.02 to 0.02. Since this contains 0, we can fail to reject the null hypothesis. There is no significant difference in average rating for sequels.
+With the confidence level set to 95%, the difference in mean ratings between first books and sequels/prequels should fall between -0.02 to 0.02. Since this contains 0, once again the null hypothesis cannot be rejected. No significant difference in average rating is proven here for sequels over first books in series.
 
 
 ### Readership
 
-A different angle of examination than rating is readership: users who marked themselves as current readers of a title or interested/potential readers. The average number of users who are either currently reading or `want_to_read` a standalone book is much higher than for series.
+A different angle of examination than rating is readership: users who marked themselves as current readers of a title or interested/potential readers. The average number of users who are either currently reading or `want_to_read` a standalone book is much higher than for series. The idea is that it may be daunting for users to commit to reading an entire series.
  
 ```{r readership-count, message=FALSE, warning=FALSE}
 books_readership <- books |>
@@ -234,12 +250,12 @@ readership_summary
 ggplot(readership_summary, aes(fill = reader_type, x = serial, y = mean_readership)) + 
   geom_bar(position = "dodge", stat = "identity") +
   scale_y_sqrt() +
-  labs(y = "Number of users", x= "") +
+  labs(y = "Number of users", x = "Readership by book and user type", title = "") +
   scale_x_discrete(labels = c("FALSE" = "Standalone book", "TRUE" = "Part of a series")) +
   scale_fill_discrete(name = "Reader type", labels = c("Current Reader", "Want to read"))
 ```
 
-To isolate if the series length is a factor for users (is starting a 15-book series daunting to most users?), the data can be transformed to display the readership numbers by length of series.
+To isolate if the series length is a factor (is starting a 15-book series a commitment that users want to avoid?), the data can be transformed to display the readership numbers by length of series.
 
 ```{r readership-series}
 # group by unique series titles, calculate the totals for series length and readership
@@ -248,57 +264,69 @@ series_length <- series |>
   summarize(
     series_len = n(),
     total_current = sum(current_readers),
-    total_want_read = sum(want_to_read),
-    mean_score = mean(rating_score)
-  ) |>
+    total_want_read = sum(want_to_read)) |>
   replace_na(list(total_current = 0, total_potential = 0)) |>
   select(-series_title)
 
-series_length
+# group by series length and calculate mean readership
+series_length <- series_length |>
+  group_by(series_len) |>
+  summarize(
+    mean_current = mean(total_current, na.rm = TRUE),
+    mean_want_read = mean(total_want_read, na.rm = TRUE))
+
+knitr::kable(series_length)
 ```
 
-```{r current-plot}
-ggplot(series_length, aes(x = series_len, y = total_current)) +
-  geom_jitter() +
-  scale_y_continuous(transform = "log2") +
-  labs(y = "Number of current readers", x = "Number of books in series") +
+Although the user counts are higher for first books by raw totals, there does not appear to be a linear relationship between series length and mean readership.
+
+```{r current-plot, message=FALSE, warning=FALSE}
+ggplot(series_length, aes(x = series_len, y = mean_current)) +
+  geom_point() +
+  labs(y = "Number of current readers",
+       x = "Number of books in series",
+       title = "Current Readership by Series Length") +
   stat_smooth(method = "lm", se = FALSE)
 ```
 
-```{r potential-plot}
-ggplot(series_length, aes(x = series_len, y = total_want_read)) +
-  geom_jitter() +
-  scale_y_continuous(transform = "log2") +
-  labs(y = "Number of potential readers", x = "Number of books in series") +
+```{r potential-plot, message=FALSE, warning=FALSE}
+ggplot(series_length, aes(x = series_len, y = mean_want_read)) +
+  geom_point() +
+  labs(y = "Number of potential readers",
+       x = "Number of books in series",
+       title = "Potential Readership by Series Length") +
   stat_smooth(method = "lm", se = FALSE)
 ```
 
-There does not appear to be much of a linear relationship between series length and readership; below the correlation for series length and total interested readers is barely under 0.3, or fairly weak.
+Below, the correlation for series length and total `want_to_read` is quite weak.
 
 ```{r len-corr}
 series_length |>
-  summarise(cor(series_len, total_want_read, use = "complete.obs"))
+  summarise(cor(series_len, mean_want_read, use = "complete.obs"))
 ```
 
-Similarly, the linear model shows a low R-squared of 0.08:
+Similarly, the linear model shows a low R-squared of -0.07.:
 
 ```{r len-lm}
-m_read <- lm(total_want_read ~ series_len, data = series_length)
+m_read <- lm(mean_want_read ~ series_len, data = series_length)
 summary(m_read)
 ```
 
-The residual plots only further demonstrate the weak relationship. The points do not form much of a cloud around the 0 in the scatter plot and the normal probability plot is flattened in the center.
+To confirm the reliability of `m_read`, the scatter plot below visualizes the residuals vs predicted values. The data transformation has reduced the number of data points but they appear to be scattered fairly randomly around 0. The normal probability plot also appears distributed fairly normally.
 
-```{r resid}
+```{r resid-scatter}
 ggplot(data = m_read, aes(x = .fitted, y = .resid)) +
   geom_point() +
   geom_hline(yintercept = 0, linetype = "dashed") + xlab("Fitted values") +
   ylab("Residuals")
+```
 
- ggplot(data = m_read, aes(sample = .resid)) + stat_qq()
+```{r resid-qq}
+ggplot(data = m_read, aes(sample = .resid)) + stat_qq()
 ```
 
 ## Conclusion
 
+Using data from Goodreads' Top 100 Books lists spanning over 40 years, this analysis reveals no statistically significant differences in mean user ratings between standalone books and book in series; neither do sequels exhibit notable differences in average ratings compared to first installments. Furthermore, the disparity in the number of current and potential Goodreads users for standalone books versus series is not significant.
 
-
+These conclusions may be useful for authors and publishers, but the analysis has limitations. The dataset is based on users' subjective engagement, so ratings and `want_to_read` are fields up for individual interpretation (a reader may simply forget to update their lists). There are also potential biases not addressed here, based on authors, current trends, sales, reader demographics or genres. This information could be valuable if included. The statistical analysis was also heavily based on aggregates and means; there could be other avenues of exploration.
